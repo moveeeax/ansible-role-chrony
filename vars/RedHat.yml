@@ -1,0 +1,9 @@
+---
+# RedHat-family variables for ansible-role-chrony
+
+chrony_package: "chrony"
+chrony_service: "chronyd"
+chrony_config_path: "/etc/chrony.conf"
+chrony_config_owner: "root"
+chrony_config_group: "root"
+chrony_driftfile_default: "/var/lib/chrony/drift"
