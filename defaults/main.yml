@@ -1,0 +1,27 @@
+---
+# defaults file for ansible-role-chrony
+
+# Individual NTP servers to synchronise against. Each entry may be a bare
+# hostname or a mapping with an "options" key for per-server chrony options.
+chrony_servers:
+  - "0.pool.ntp.org"
+  - "1.pool.ntp.org"
+
+# NTP pools to synchronise against. Pools are expanded by chrony into
+# multiple sources at runtime.
+chrony_pools:
+  - name: "2.pool.ntp.org"
+    options: "iburst"
+
+# Path to the drift file that records the local clock's gain or loss rate.
+chrony_driftfile: "{{ chrony_driftfile_default }}"
+
+# Step the clock (rather than slew) if the initial offset is larger than
+# this threshold, for the first N updates. Set makestep_updates to 0 to
+# disable stepping entirely.
+chrony_makestep_threshold: 1.0
+chrony_makestep_updates: 3
+
+# Synchronise the real-time clock from the system clock. Supported on Linux
+# hosts with an RTC; harmless to leave enabled elsewhere.
+chrony_rtcsync: true
