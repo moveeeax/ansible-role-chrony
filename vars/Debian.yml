@@ -1,0 +1,9 @@
+---
+# Debian-family variables for ansible-role-chrony
+
+chrony_package: "chrony"
+chrony_service: "chrony"
+chrony_config_path: "/etc/chrony/chrony.conf"
+chrony_config_owner: "root"
+chrony_config_group: "root"
+chrony_driftfile_default: "/var/lib/chrony/chrony.drift"
