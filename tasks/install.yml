@@ -1,0 +1,7 @@
+---
+# Install the chrony package
+
+- name: Install chrony
+  ansible.builtin.package:
+    name: "{{ chrony_package }}"
+    state: present
