@@ -1,0 +1,31 @@
+## {{ ansible_managed }}
+## chrony configuration managed by ansible-role-chrony.
+
+{% for server in chrony_servers %}
+{% if server is mapping %}
+server {{ server.name }}{% if server.options is defined %} {{ server.options }}{% endif %}
+
+{% else %}
+server {{ server }} iburst
+{% endif %}
+{% endfor %}
+{% for pool in chrony_pools %}
+{% if pool is mapping %}
+pool {{ pool.name }}{% if pool.options is defined %} {{ pool.options }}{% endif %}
+
+{% else %}
+pool {{ pool }} iburst
+{% endif %}
+{% endfor %}
+
+# Record the rate at which the system clock gains or loses time.
+driftfile {{ chrony_driftfile }}
+
+{% if chrony_makestep_updates | int > 0 %}
+# Step the clock for the first few updates if the offset is large.
+makestep {{ chrony_makestep_threshold }} {{ chrony_makestep_updates }}
+{% endif %}
+{% if chrony_rtcsync | bool %}
+# Enable kernel synchronisation of the real-time clock.
+rtcsync
+{% endif %}
