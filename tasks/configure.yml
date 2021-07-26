@@ -1,0 +1,18 @@
+---
+# Deploy the chrony configuration and manage the service
+
+- name: Deploy chrony configuration
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: "{{ chrony_config_path }}"
+    owner: "{{ chrony_config_owner }}"
+    group: "{{ chrony_config_group }}"
+    mode: "0644"
+    validate: "chronyd -p -f %s"
+  notify: Restart chrony
+
+- name: Enable and start chrony
+  ansible.builtin.systemd:
+    name: "{{ chrony_service }}"
+    enabled: true
+    state: started
