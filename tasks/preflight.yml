@@ -1,0 +1,16 @@
+---
+# Validate role inputs before making any changes
+
+- name: Assert at least one time source is configured
+  ansible.builtin.assert:
+    that:
+      - (chrony_servers | length) + (chrony_pools | length) > 0
+    fail_msg: >-
+      Configure at least one entry in chrony_servers or chrony_pools,
+      otherwise chrony has no time source to synchronise against.
+
+- name: Assert makestep updates is not negative
+  ansible.builtin.assert:
+    that:
+      - chrony_makestep_updates | int >= 0
+    fail_msg: "chrony_makestep_updates must be zero or a positive integer."
