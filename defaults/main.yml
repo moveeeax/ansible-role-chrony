@@ -25,3 +25,11 @@ chrony_makestep_updates: 3
 # Synchronise the real-time clock from the system clock. Supported on Linux
 # hosts with an RTC; harmless to leave enabled elsewhere.
 chrony_rtcsync: true
+
+# Networks permitted to use this host as an NTP server. Leave empty to run
+# as a client only. Example: ["192.0.2.0/24", "10.0.0.0/8"].
+chrony_allow: []
+
+# When acting as a server, allow chrony to serve time even when it is not
+# itself synchronised, at the given stratum. Set to 0 to disable.
+chrony_local_stratum: 0

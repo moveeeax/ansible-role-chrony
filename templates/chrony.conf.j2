@@ -29,3 +29,14 @@ makestep {{ chrony_makestep_threshold }} {{ chrony_makestep_updates }}
 # Enable kernel synchronisation of the real-time clock.
 rtcsync
 {% endif %}
+{% if chrony_allow | length > 0 %}
+
+# Networks permitted to use this host as an NTP server.
+{% for network in chrony_allow %}
+allow {{ network }}
+{% endfor %}
+{% endif %}
+{% if chrony_local_stratum | int > 0 %}
+# Serve time even when not synchronised to an upstream source.
+local stratum {{ chrony_local_stratum }}
+{% endif %}
