@@ -1,0 +1,26 @@
+---
+# tasks file for ansible-role-chrony
+
+- name: Load OS-specific variables
+  ansible.builtin.include_vars: "{{ ansible_os_family }}.yml"
+  tags:
+    - chrony
+    - vars
+
+- name: Validate role inputs
+  ansible.builtin.import_tasks: preflight.yml
+  tags:
+    - chrony
+    - preflight
+
+- name: Install chrony
+  ansible.builtin.import_tasks: install.yml
+  tags:
+    - chrony
+    - install
+
+- name: Configure chrony
+  ansible.builtin.import_tasks: configure.yml
+  tags:
+    - chrony
+    - configure
