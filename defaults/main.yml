@@ -33,3 +33,7 @@ chrony_allow: []
 # When acting as a server, allow chrony to serve time even when it is not
 # itself synchronised, at the given stratum. Set to 0 to disable.
 chrony_local_stratum: 0
+
+# Arbitrary extra directives appended verbatim to the end of chrony.conf.
+# Each list item is written as its own line.
+chrony_extra_config: []

@@ -40,3 +40,10 @@ allow {{ network }}
 # Serve time even when not synchronised to an upstream source.
 local stratum {{ chrony_local_stratum }}
 {% endif %}
+{% if chrony_extra_config | length > 0 %}
+
+# Additional directives supplied via chrony_extra_config.
+{% for line in chrony_extra_config %}
+{{ line }}
+{% endfor %}
+{% endif %}
