@@ -1,0 +1,13 @@
+---
+# Optionally manage the system timezone via timedatectl
+
+- name: Query the current system timezone
+  ansible.builtin.command: timedatectl show --property=Timezone --value
+  register: chrony_current_timezone
+  changed_when: false
+  check_mode: false
+
+- name: Set the system timezone
+  ansible.builtin.command: "timedatectl set-timezone {{ chrony_timezone }}"
+  changed_when: true
+  when: chrony_current_timezone.stdout != chrony_timezone
