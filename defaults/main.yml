@@ -37,3 +37,7 @@ chrony_local_stratum: 0
 # Arbitrary extra directives appended verbatim to the end of chrony.conf.
 # Each list item is written as its own line.
 chrony_extra_config: []
+
+# Optionally set the system timezone (as an IANA name such as
+# "Europe/Berlin"). Leave empty to leave the host timezone untouched.
+chrony_timezone: ""
