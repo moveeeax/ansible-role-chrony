@@ -13,6 +13,13 @@
     - chrony
     - preflight
 
+- name: Manage system timezone
+  ansible.builtin.import_tasks: timezone.yml
+  when: chrony_timezone | length > 0
+  tags:
+    - chrony
+    - timezone
+
 - name: Install chrony
   ansible.builtin.import_tasks: install.yml
   tags:
