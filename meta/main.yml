@@ -1,0 +1,25 @@
+---
+galaxy_info:
+  role_name: chrony
+  author: Michael Tarassov
+  description: Install and configure chrony (NTP) as a systemd service
+  company: ""
+  license: MIT
+  min_ansible_version: "2.9"
+  platforms:
+    - name: EL
+      versions:
+        - "7"
+        - "8"
+    - name: Ubuntu
+      versions:
+        - bionic
+        - focal
+  galaxy_tags:
+    - ntp
+    - chrony
+    - time
+    - systemd
+    - clock
+
+dependencies: []
