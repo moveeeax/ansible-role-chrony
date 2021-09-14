@@ -1,0 +1,17 @@
+---
+- name: Converge chrony role
+  hosts: all
+  become: true
+  roles:
+    - role: ansible-role-chrony
+      vars:
+        chrony_servers:
+          - "0.pool.ntp.org"
+          - name: "time.cloudflare.com"
+            options: "iburst"
+        chrony_pools:
+          - name: "2.pool.ntp.org"
+            options: "iburst"
+        chrony_allow:
+          - "192.0.2.0/24"
+        chrony_rtcsync: true
