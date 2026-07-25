@@ -5,16 +5,23 @@ galaxy_info:
   description: Install and configure chrony (NTP) as a systemd service
   company: ""
   license: MIT
-  min_ansible_version: "2.9"
+  # The role calls modules by their ansible.builtin.* fully qualified names,
+  # which only resolve from ansible-base 2.10 onwards. It cannot run on 2.9.
+  min_ansible_version: "2.10"
   platforms:
     - name: EL
       versions:
-        - "7"
         - "8"
+        - "9"
+    - name: Debian
+      versions:
+        - bullseye
+        - bookworm
     - name: Ubuntu
       versions:
-        - bionic
         - focal
+        - jammy
+        - noble
   galaxy_tags:
     - ntp
     - chrony
