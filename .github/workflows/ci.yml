@@ -7,21 +7,24 @@ name: CI
       - main
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   lint:
-    name: Lint and syntax-check
+    name: Lint and test
     runs-on: ubuntu-latest
     steps:
       - name: Check out the codebase
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install "ansible>=2.9,<2.11" ansible-lint yamllint
+        run: pip install --disable-pip-version-check ansible-core ansible-lint yamllint
 
       - name: Run yamllint
         run: yamllint .
@@ -31,3 +34,6 @@ jobs:
 
       - name: Run syntax-check
         run: ansible-playbook --syntax-check -i tests/inventory tests/test.yml
+
+      - name: Run the chrony.conf rendering tests
+        run: ansible-playbook -i tests/inventory tests/render.yml

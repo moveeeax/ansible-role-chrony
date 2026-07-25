@@ -1,0 +1,175 @@
+---
+# Offline regression tests for defaults/main.yml and templates/chrony.conf.j2.
+#
+# These render the real template with the real Ansible templating engine and
+# assert on the generated chrony.conf. They need no root, no chrony package,
+# no container and no network, so they run anywhere:
+#
+#   ansible-playbook -i tests/inventory tests/render.yml
+#
+# The first case deliberately renders the role's shipped defaults untouched,
+# so a change that makes the defaults unsafe (for example serving time to the
+# whole internet) fails here rather than in production.
+
+- name: Regression tests for the chrony.conf template
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  # Loaded as vars_files rather than include_vars on purpose: vars_files sit
+  # below task vars in Ansible's precedence order, so the per-case overrides
+  # below actually take effect. include_vars outranks task vars and would
+  # silently render every case with the defaults instead.
+  vars_files:
+    - ../vars/RedHat.yml
+    - ../defaults/main.yml
+
+  vars:
+    chrony_template: "{{ playbook_dir }}/../templates/chrony.conf.j2"
+
+  tasks:
+    - name: Create a scratch directory for the rendered configurations
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: chrony-render-test
+      register: chrony_render_dir
+
+    - name: Run the rendering assertions
+      block:
+        # Case 1 - the shipped defaults, with no overrides at all.
+        - name: Render the role defaults
+          ansible.builtin.template:
+            src: "{{ chrony_template }}"
+            dest: "{{ chrony_render_dir.path }}/defaults.conf"
+            mode: "0644"
+
+        - name: Assert the defaults produce a working client-only configuration
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/defaults.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'server 0.pool.ntp.org iburst' in conf"
+              - "'server 1.pool.ntp.org iburst' in conf"
+              - "'pool 2.pool.ntp.org iburst' in conf"
+              - "'driftfile /var/lib/chrony/drift' in conf"
+              - "'makestep 1.0 3' in conf"
+              - "'rtcsync' in conf"
+            fail_msg: >-
+              The default configuration no longer contains a usable set of time
+              sources and clock options.
+
+        - name: Assert the defaults do not serve time to anyone
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/defaults.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'allow' not in conf"
+              - "'local stratum' not in conf"
+            fail_msg: >-
+              The default configuration turns the host into an NTP server. The
+              role must be a client by default; server mode belongs behind
+              chrony_allow and chrony_local_stratum.
+
+        # Case 2 - mapping entries must use the options the caller supplied
+        # rather than the implicit iburst added to bare hostnames.
+        - name: Render mapping-style time sources
+          ansible.builtin.template:
+            src: "{{ chrony_template }}"
+            dest: "{{ chrony_render_dir.path }}/mappings.conf"
+            mode: "0644"
+          vars:
+            chrony_servers:
+              - "0.pool.ntp.org"
+              - name: "time.cloudflare.com"
+                options: "iburst maxpoll 10"
+            chrony_pools:
+              - "3.pool.ntp.org"
+              - name: "2.pool.ntp.org"
+                options: "iburst maxsources 4"
+
+        - name: Assert mapping and string time sources are both rendered
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/mappings.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'server 0.pool.ntp.org iburst' in conf"
+              - "'server time.cloudflare.com iburst maxpoll 10' in conf"
+              - "'pool 3.pool.ntp.org iburst' in conf"
+              - "'pool 2.pool.ntp.org iburst maxsources 4' in conf"
+            fail_msg: >-
+              Mapping entries with an options key are no longer rendered with
+              those options, or bare hostnames lost their implicit iburst.
+
+        # Case 3 - the clock directives must disappear entirely when disabled,
+        # not be emitted with a zero or false argument.
+        - name: Render with the clock options disabled
+          ansible.builtin.template:
+            src: "{{ chrony_template }}"
+            dest: "{{ chrony_render_dir.path }}/noclock.conf"
+            mode: "0644"
+          vars:
+            chrony_makestep_updates: 0
+            chrony_rtcsync: false
+
+        - name: Assert disabled clock options emit no directive
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/noclock.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'makestep' not in conf"
+              - "'rtcsync' not in conf"
+            fail_msg: >-
+              chrony_makestep_updates=0 or chrony_rtcsync=false still emitted a
+              directive. chronyd would then step the clock or drive the RTC
+              against the operator's wishes.
+
+        # Case 4 - server mode.
+        - name: Render a server-mode configuration
+          ansible.builtin.template:
+            src: "{{ chrony_template }}"
+            dest: "{{ chrony_render_dir.path }}/server.conf"
+            mode: "0644"
+          vars:
+            chrony_allow:
+              - "192.0.2.0/24"
+              - "198.51.100.0/24"
+            chrony_local_stratum: 8
+            chrony_extra_config:
+              - "leapsectz right/UTC"
+              - "logdir /var/log/chrony"
+
+        - name: Assert server mode emits every allow network and the extras
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/server.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'allow 192.0.2.0/24' in conf"
+              - "'allow 198.51.100.0/24' in conf"
+              - "'local stratum 8' in conf"
+              - "'leapsectz right/UTC' in conf"
+              - "'logdir /var/log/chrony' in conf"
+            fail_msg: >-
+              Server-mode directives are missing. A dropped allow entry silently
+              denies clients; a dropped local stratum silently stops serving.
+
+        # A malformed directive (for example a mapping entry without a name)
+        # would be rejected by chronyd at deploy time, but only after the file
+        # has been written. Catch the shape here instead.
+        - name: Assert no rendered file contains a directive with no argument
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/' ~ item) }}"
+          ansible.builtin.assert:
+            that:
+              - conf | regex_search('(?m)^(server|pool|allow|driftfile|local)\\s*$') is none
+            fail_msg: "{{ item }} contains a chrony directive with no argument."
+          loop:
+            - defaults.conf
+            - mappings.conf
+            - noclock.conf
+            - server.conf
+
+      always:
+        - name: Remove the scratch directory
+          ansible.builtin.file:
+            path: "{{ chrony_render_dir.path }}"
+            state: absent

@@ -7,8 +7,10 @@ RedHat and Debian families.
 
 ## Requirements
 
-- Ansible 2.9 or newer.
-- A target host running systemd.
+- Ansible 2.10 (ansible-base) or newer. The role addresses modules by their
+  `ansible.builtin.*` fully qualified names, which do not resolve on 2.9.
+- A target host running systemd, in the RedHat or Debian OS family.
+- Facts must be gathered, so the role can select the per-OS variables.
 
 ## Role Variables
 
@@ -54,6 +56,25 @@ None.
           - "10.0.0.0/8"
         chrony_timezone: "Europe/Berlin"
 ```
+
+## Testing
+
+Two checks run in CI and both work offline, without root, a chrony package or
+a container:
+
+```sh
+# Parse the role and the example play.
+ansible-playbook --syntax-check -i tests/inventory tests/test.yml
+
+# Render templates/chrony.conf.j2 against the shipped defaults and against
+# server-mode, mapping-style and clock-disabled overrides, then assert on the
+# generated chrony.conf.
+ansible-playbook -i tests/inventory tests/render.yml
+```
+
+`tests/render.yml` pins the behaviour that matters: the defaults stay
+client-only, disabling `chrony_makestep_updates` or `chrony_rtcsync` really
+removes the directive, and every `chrony_allow` network reaches the file.
 
 ## License
 

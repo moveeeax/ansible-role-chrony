@@ -1,6 +1,19 @@
 ---
 # Validate role inputs before making any changes
 
+- name: Assert the target OS family is supported
+  vars:
+    chrony_supported_os_families:
+      - Debian
+      - RedHat
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family | default('') in chrony_supported_os_families
+    fail_msg: >-
+      ansible-role-chrony ships no variables for this target
+      (ansible_os_family = "{{ ansible_os_family | default('undefined, are facts gathered?') }}").
+      Supported families: {{ chrony_supported_os_families | join(', ') }}.
+
 - name: Assert at least one time source is configured
   ansible.builtin.assert:
     that:
