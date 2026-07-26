@@ -59,7 +59,7 @@ None.
 
 ## Testing
 
-Two checks run in CI and both work offline, without root, a chrony package or
+Three checks run in CI and all work offline, without root, a chrony package or
 a container:
 
 ```sh
@@ -70,11 +70,20 @@ ansible-playbook --syntax-check -i tests/inventory tests/test.yml
 # server-mode, mapping-style and clock-disabled overrides, then assert on the
 # generated chrony.conf.
 ansible-playbook -i tests/inventory tests/render.yml
+
+# Import tasks/preflight.yml against deliberately invalid input (an unnamed
+# server/pool mapping, a non-numeric makestep or stratum value) and assert
+# each one is rejected with an actionable message.
+ansible-playbook -i tests/inventory tests/validate.yml
 ```
 
 `tests/render.yml` pins the behaviour that matters: the defaults stay
 client-only, disabling `chrony_makestep_updates` or `chrony_rtcsync` really
 removes the directive, and every `chrony_allow` network reaches the file.
+
+`tests/validate.yml` pins the failure behaviour: bad input must fail loudly
+in `preflight.yml`, with a message naming the offending variable, rather than
+being silently coerced away or surfacing later as a raw Jinja error.
 
 ## License
 
