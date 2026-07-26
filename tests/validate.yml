@@ -1,0 +1,125 @@
+---
+# Regression tests for tasks/preflight.yml's input validation.
+#
+# preflight.yml exists so a bad chrony_servers/chrony_pools/chrony_makestep_*
+# value fails fast with an actionable ansible.builtin.assert message, instead
+# of surfacing later as a raw Jinja TypeError while rendering chrony.conf.j2,
+# or as chronyd rejecting an empty directive after the file is already on
+# disk. This playbook proves each guard actually fires, and that it fires
+# for the stated reason rather than some unrelated assertion:
+#
+#   ansible-playbook -i tests/inventory tests/validate.yml
+#
+# Each case imports the role's real preflight.yml (not a copy) against one
+# deliberately invalid variable, inside a block/rescue, and asserts on the
+# resulting failure message.
+
+- name: Regression tests for role input validation
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  # Same vars_files vs. task-vars precedence trick as tests/render.yml: the
+  # defaults load here, and the single bad value under test is overridden
+  # per case via the import's own "vars:" so everything else stays valid.
+  vars_files:
+    - ../vars/RedHat.yml
+    - ../defaults/main.yml
+
+  vars:
+    ansible_os_family: RedHat
+
+  tasks:
+    # Case 1 - a mapping-style server entry with no "name" key used to reach
+    # the template untouched and fail with "object of type 'dict' has no
+    # attribute 'name'" - correct outcome, unusable message.
+    - name: Case 1 - reject a chrony_servers mapping entry with no name
+      block:
+        - name: Run preflight against an unnamed server mapping
+          ansible.builtin.import_tasks: ../tasks/preflight.yml
+          vars:
+            chrony_servers:
+              - options: "iburst"
+        - name: Preflight.yml must not accept this input
+          ansible.builtin.fail:
+            msg: "An unnamed chrony_servers mapping entry passed preflight validation."
+      rescue:
+        - name: Assert preflight failed because of the missing name
+          vars:
+            chrony_test_failure_msg: "{{ ansible_failed_result.results | default([ansible_failed_result]) | map(attribute='msg') | join(' | ') }}"
+          ansible.builtin.assert:
+            that:
+              - "'chrony_servers' in chrony_test_failure_msg"
+              - "'name' in chrony_test_failure_msg"
+            fail_msg: >-
+              preflight.yml rejected the input, but the message does not
+              point at the missing name key: {{ chrony_test_failure_msg }}
+
+    # Case 2 - same defect on the chrony_pools side.
+    - name: Case 2 - reject a chrony_pools mapping entry with no name
+      block:
+        - name: Run preflight against an unnamed pool mapping
+          ansible.builtin.import_tasks: ../tasks/preflight.yml
+          vars:
+            chrony_pools:
+              - options: "iburst"
+        - name: Preflight.yml must not accept this input
+          ansible.builtin.fail:
+            msg: "An unnamed chrony_pools mapping entry passed preflight validation."
+      rescue:
+        - name: Assert preflight failed because of the missing name
+          vars:
+            chrony_test_failure_msg: "{{ ansible_failed_result.results | default([ansible_failed_result]) | map(attribute='msg') | join(' | ') }}"
+          ansible.builtin.assert:
+            that:
+              - "'chrony_pools' in chrony_test_failure_msg"
+              - "'name' in chrony_test_failure_msg"
+            fail_msg: >-
+              preflight.yml rejected the input, but the message does not
+              point at the missing name key: {{ chrony_test_failure_msg }}
+
+    # Case 3 - a non-numeric chrony_makestep_updates used to be silently
+    # coerced to 0 by the `| int` filter and pass the old ">= 0" check,
+    # quietly disabling clock stepping instead of failing on the typo.
+    - name: Case 3 - reject a non-numeric chrony_makestep_updates
+      block:
+        - name: Run preflight against a non-numeric makestep_updates
+          ansible.builtin.import_tasks: ../tasks/preflight.yml
+          vars:
+            chrony_makestep_updates: "three"
+        - name: Preflight.yml must not accept this input
+          ansible.builtin.fail:
+            msg: "A non-numeric chrony_makestep_updates passed preflight validation."
+      rescue:
+        - name: Assert preflight failed for chrony_makestep_updates
+          ansible.builtin.assert:
+            that:
+              - "'chrony_makestep_updates' in ansible_failed_result.msg"
+            fail_msg: >-
+              preflight.yml rejected the input, but not for
+              chrony_makestep_updates: {{ ansible_failed_result.msg }}
+
+    # Case 4 - same silent-coercion hazard on chrony_local_stratum, which
+    # previously had no validation of any kind.
+    - name: Case 4 - reject a non-numeric chrony_local_stratum
+      block:
+        - name: Run preflight against a non-numeric local_stratum
+          ansible.builtin.import_tasks: ../tasks/preflight.yml
+          vars:
+            chrony_local_stratum: "high"
+        - name: Preflight.yml must not accept this input
+          ansible.builtin.fail:
+            msg: "A non-numeric chrony_local_stratum passed preflight validation."
+      rescue:
+        - name: Assert preflight failed for chrony_local_stratum
+          ansible.builtin.assert:
+            that:
+              - "'chrony_local_stratum' in ansible_failed_result.msg"
+            fail_msg: >-
+              preflight.yml rejected the input, but not for
+              chrony_local_stratum: {{ ansible_failed_result.msg }}
+
+    # Case 5 - the new assertions above must not reject the role's own
+    # shipped defaults.
+    - name: Case 5 - preflight accepts the shipped defaults unmodified
+      ansible.builtin.import_tasks: ../tasks/preflight.yml
