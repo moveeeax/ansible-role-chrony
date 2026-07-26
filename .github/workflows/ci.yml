@@ -37,3 +37,6 @@ jobs:
 
       - name: Run the chrony.conf rendering tests
         run: ansible-playbook -i tests/inventory tests/render.yml
+
+      - name: Run the preflight validation tests
+        run: ansible-playbook -i tests/inventory tests/validate.yml

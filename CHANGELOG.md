@@ -11,8 +11,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - `tests/render.yml`, an offline test playbook that renders `chrony.conf` from
   the shipped defaults and from server-mode, mapping-style and clock-disabled
   overrides, and asserts on the result. It runs in CI.
+- `tests/validate.yml`, an offline test playbook that imports the role's real
+  `tasks/preflight.yml` against deliberately invalid input and asserts each
+  case is rejected with an actionable message. It runs in CI.
 - Preflight assertion for the target OS family, so an unsupported host reports
   what is supported instead of a missing `<OsFamily>.yml` file.
+- Preflight assertions rejecting `chrony_servers`/`chrony_pools` mapping
+  entries with no `name` key, so a typo fails with a clear message instead of
+  a raw `object of type 'dict' has no attribute 'name'` error out of the
+  template.
+- Preflight assertion for `chrony_local_stratum`, which previously had no
+  input validation at all.
 
 ### Changed
 
@@ -32,6 +41,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Galaxy platform metadata now lists Debian, which `vars/Debian.yml` has always
   supported but which was never declared. EOL entries (EL 7, Ubuntu bionic)
   were dropped and current releases added.
+- `chrony_makestep_updates` validation tightened. Jinja's `| int` filter
+  silently coerces an unparsable value (for example a typo like `"three"`) to
+  `0`, so the old `>= 0` check let it through and quietly disabled clock
+  stepping instead of failing on the operator's mistake. The check now
+  requires a genuine non-negative integer.
 
 ## [1.0.0] - 2021-05-16
 

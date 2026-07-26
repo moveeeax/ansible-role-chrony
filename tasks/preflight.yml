@@ -22,8 +22,53 @@
       Configure at least one entry in chrony_servers or chrony_pools,
       otherwise chrony has no time source to synchronise against.
 
-- name: Assert makestep updates is not negative
+# A mapping entry with no "name" key renders past this point and blows up
+# inside chrony.conf.j2 with a bare "object of type 'dict' has no attribute
+# 'name'" - technically correct, useless to whoever set the variable. Catch
+# it here with a message that says what to fix.
+- name: Assert every chrony_servers mapping entry has a name
   ansible.builtin.assert:
     that:
+      - item is not mapping or (item.name | default('') | length > 0)
+    fail_msg: >-
+      Every mapping entry in chrony_servers must include a non-empty "name"
+      key (the hostname to synchronise against). Offending entry: {{ item }}
+  loop: "{{ chrony_servers }}"
+  loop_control:
+    label: "{{ item if item is not mapping else (item.name | default('<missing name>')) }}"
+
+- name: Assert every chrony_pools mapping entry has a name
+  ansible.builtin.assert:
+    that:
+      - item is not mapping or (item.name | default('') | length > 0)
+    fail_msg: >-
+      Every mapping entry in chrony_pools must include a non-empty "name"
+      key (the pool hostname to synchronise against). Offending entry: {{ item }}
+  loop: "{{ chrony_pools }}"
+  loop_control:
+    label: "{{ item if item is not mapping else (item.name | default('<missing name>')) }}"
+
+# The `| int` filter silently coerces anything it cannot parse to 0 rather
+# than raising an error, so a typo such as "three" used to sail through the
+# old ">= 0" check and quietly disable clock stepping instead of failing on
+# the operator's mistake.
+- name: Assert makestep updates is a non-negative integer
+  ansible.builtin.assert:
+    that:
+      - chrony_makestep_updates is number or (chrony_makestep_updates is string and chrony_makestep_updates is match('^[0-9]+$'))
       - chrony_makestep_updates | int >= 0
-    fail_msg: "chrony_makestep_updates must be zero or a positive integer."
+    fail_msg: >-
+      chrony_makestep_updates must be zero or a positive integer, got
+      {{ chrony_makestep_updates }}.
+
+# Same silent-coercion hazard as chrony_makestep_updates above, and this one
+# had no validation at all: a bad value here used to become stratum 0
+# (disabled) with no indication anything was wrong.
+- name: Assert local stratum is a non-negative integer
+  ansible.builtin.assert:
+    that:
+      - chrony_local_stratum is number or (chrony_local_stratum is string and chrony_local_stratum is match('^[0-9]+$'))
+      - chrony_local_stratum | int >= 0
+    fail_msg: >-
+      chrony_local_stratum must be zero or a positive integer, got
+      {{ chrony_local_stratum }}.
