@@ -40,7 +40,7 @@
           vars:
             chrony_servers:
               - options: "iburst"
-        - name: preflight.yml must not accept this input
+        - name: Preflight.yml must not accept this input
           ansible.builtin.fail:
             msg: "An unnamed chrony_servers mapping entry passed preflight validation."
       rescue:
@@ -63,7 +63,7 @@
           vars:
             chrony_pools:
               - options: "iburst"
-        - name: preflight.yml must not accept this input
+        - name: Preflight.yml must not accept this input
           ansible.builtin.fail:
             msg: "An unnamed chrony_pools mapping entry passed preflight validation."
       rescue:
@@ -87,7 +87,7 @@
           ansible.builtin.import_tasks: ../tasks/preflight.yml
           vars:
             chrony_makestep_updates: "three"
-        - name: preflight.yml must not accept this input
+        - name: Preflight.yml must not accept this input
           ansible.builtin.fail:
             msg: "A non-numeric chrony_makestep_updates passed preflight validation."
       rescue:
@@ -107,7 +107,7 @@
           ansible.builtin.import_tasks: ../tasks/preflight.yml
           vars:
             chrony_local_stratum: "high"
-        - name: preflight.yml must not accept this input
+        - name: Preflight.yml must not accept this input
           ansible.builtin.fail:
             msg: "A non-numeric chrony_local_stratum passed preflight validation."
       rescue:
