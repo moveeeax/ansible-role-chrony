@@ -8,20 +8,59 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- `tests/render.yml`, an offline test playbook that renders `chrony.conf` from
-  the shipped defaults and from server-mode, mapping-style and clock-disabled
-  overrides, and asserts on the result. It runs in CI.
 - `tests/validate.yml`, an offline test playbook that imports the role's real
   `tasks/preflight.yml` against deliberately invalid input and asserts each
   case is rejected with an actionable message. It runs in CI.
-- Preflight assertion for the target OS family, so an unsupported host reports
-  what is supported instead of a missing `<OsFamily>.yml` file.
 - Preflight assertions rejecting `chrony_servers`/`chrony_pools` mapping
   entries with no `name` key, so a typo fails with a clear message instead of
   a raw `object of type 'dict' has no attribute 'name'` error out of the
   template.
 - Preflight assertion for `chrony_local_stratum`, which previously had no
   input validation at all.
+- Dependabot configuration that keeps the GitHub Actions in CI up to date.
+
+### Changed
+
+- CI uses `actions/checkout@v7` and `actions/setup-python@v7`.
+- The README links to the chrony project at its current home,
+  <https://chrony-project.org/>. The old `chrony.tuxfamily.org` address only
+  redirects there.
+
+### Removed
+
+- Galaxy platform metadata no longer lists Debian 11 (bullseye) or Ubuntu
+  20.04 (focal). Both are past the end of their standard (and, for bullseye,
+  LTS) support, and the role is not tested on them.
+
+### Fixed
+
+- `chrony_makestep_updates` validation tightened. Jinja's `| int` filter
+  silently coerces an unparsable value (for example a typo like `"three"`) to
+  `0`, so the old `>= 0` check let it through and quietly disabled clock
+  stepping instead of failing on the operator's mistake. The check now
+  requires a genuine non-negative integer.
+
+## [0.1.0] - 2026-07-26
+
+First tagged release. This changelog previously described the initial
+feature set as `1.0.0`, but no such version was ever tagged; the entries are
+renumbered to match the `v0.1.0` tag.
+
+### Added
+
+- Package installation for the RedHat and Debian families.
+- Templated `chrony.conf` with configurable servers, pools and driftfile.
+- Configurable makestep and rtcsync clock options.
+- Server-mode support via allow networks and local stratum.
+- Passthrough for arbitrary extra chrony directives.
+- Optional system timezone management via timedatectl.
+- Preflight assertions for time sources and makestep values.
+- Preflight assertion for the target OS family, so an unsupported host reports
+  what is supported instead of a missing `<OsFamily>.yml` file.
+- Syntax-check test playbook and a GitHub Actions lint workflow.
+- `tests/render.yml`, an offline test playbook that renders `chrony.conf` from
+  the shipped defaults and from server-mode, mapping-style and clock-disabled
+  overrides, and asserts on the result. It runs in CI.
 
 ### Changed
 
@@ -41,22 +80,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Galaxy platform metadata now lists Debian, which `vars/Debian.yml` has always
   supported but which was never declared. EOL entries (EL 7, Ubuntu bionic)
   were dropped and current releases added.
-- `chrony_makestep_updates` validation tightened. Jinja's `| int` filter
-  silently coerces an unparsable value (for example a typo like `"three"`) to
-  `0`, so the old `>= 0` check let it through and quietly disabled clock
-  stepping instead of failing on the operator's mistake. The check now
-  requires a genuine non-negative integer.
 
-## [1.0.0] - 2021-05-16
-
-### Added
-
-- Initial release of the chrony role.
-- Package installation for the RedHat and Debian families.
-- Templated `chrony.conf` with configurable servers, pools and driftfile.
-- Configurable makestep and rtcsync clock options.
-- Server-mode support via allow networks and local stratum.
-- Passthrough for arbitrary extra chrony directives.
-- Optional system timezone management via timedatectl.
-- Preflight assertions for time sources and makestep values.
-- Syntax-check test playbook and a GitHub Actions lint workflow.
+[Unreleased]: https://github.com/moveeeax/ansible-role-chrony/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/moveeeax/ansible-role-chrony/releases/tag/v0.1.0
