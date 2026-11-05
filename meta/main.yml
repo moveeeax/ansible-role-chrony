@@ -15,11 +15,9 @@ galaxy_info:
         - "9"
     - name: Debian
       versions:
-        - bullseye
         - bookworm
     - name: Ubuntu
       versions:
-        - focal
         - jammy
         - noble
   galaxy_tags:

@@ -1,6 +1,6 @@
 # ansible-role-chrony
 
-An Ansible role that installs and configures [chrony](https://chrony.tuxfamily.org/)
+An Ansible role that installs and configures [chrony](https://chrony-project.org/)
 as the system NTP service, managed through systemd. It supports both simple
 client setups and serving time to a local network, and works across the
 RedHat and Debian families.
