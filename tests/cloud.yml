@@ -1,0 +1,276 @@
+---
+# Regression tests for tasks/cloud.yml, which turns chrony_cloud_time_source
+# into the provider chrony.conf.j2 renders.
+#
+# Each case imports the role's real cloud.yml with a hand-written
+# ansible_facts dictionary standing in for the DMI facts of a given platform,
+# so nothing here needs a cloud instance, root or network access:
+#
+#   ansible-playbook -i tests/inventory tests/cloud.yml
+#
+# The Azure cases point chrony_azure_ptp_device at a scratch file (present)
+# or at a path next to it (missing), since cloud.yml checks the device exists
+# before it lets the template emit a refclock chronyd might not be able to
+# open.
+
+- name: Regression tests for cloud time source detection
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  # Same vars_files vs. task-vars precedence trick as tests/render.yml.
+  vars_files:
+    - ../vars/RedHat.yml
+    - ../defaults/main.yml
+
+  tasks:
+    - name: Create a stand-in for the Azure PTP device
+      ansible.builtin.tempfile:
+        state: file
+        suffix: chrony-ptp-test
+      register: chrony_fake_ptp
+
+    - name: Run the detection assertions
+      block:
+        - name: Case 1 - auto picks aws on a Nitro instance
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                ansible_facts:
+                  system_vendor: "Amazon EC2"
+                  product_name: "m7i.large"
+
+            - name: Assert the resolved cloud time source is aws
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'aws'
+                fail_msg: >-
+                  Expected aws, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 2 - auto picks aws on a Xen instance
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                ansible_facts:
+                  system_vendor: "Xen"
+                  bios_version: "4.11.amazon"
+                  product_name: "HVM domU"
+
+            - name: Assert the resolved cloud time source is aws
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'aws'
+                fail_msg: >-
+                  Expected aws, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 3 - auto picks aws from an ec2 system UUID
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                ansible_facts:
+                  system_vendor: ""
+                  product_uuid: "EC2E1916-9099-7CAF-FD21-012345ABCDEF"
+
+            - name: Assert the resolved cloud time source is aws
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'aws'
+                fail_msg: >-
+                  Expected aws, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 4 - auto picks gcp on Compute Engine
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                ansible_facts:
+                  system_vendor: "Google"
+                  product_name: "Google Compute Engine"
+
+            - name: Assert the resolved cloud time source is gcp
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'gcp'
+                fail_msg: >-
+                  Expected gcp, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 5 - auto picks azure when the PTP device exists
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                chrony_azure_ptp_device: "{{ chrony_fake_ptp.path }}"
+                ansible_facts:
+                  system_vendor: "Microsoft Corporation"
+                  product_name: "Virtual Machine"
+                  chassis_asset_tag: "7783-7084-3265-9085-8269-3286-77"
+
+            - name: Assert the resolved cloud time source is azure
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'azure'
+                fail_msg: >-
+                  Expected azure, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 6 - auto falls back to none when the Azure PTP device is missing
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                chrony_azure_ptp_device: "{{ chrony_fake_ptp.path }}.missing"
+                ansible_facts:
+                  system_vendor: "Microsoft Corporation"
+                  product_name: "Virtual Machine"
+                  chassis_asset_tag: "7783-7084-3265-9085-8269-3286-77"
+
+            - name: Assert the resolved cloud time source is none
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'none'
+                fail_msg: >-
+                  Expected none, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 7 - auto does not treat on-premises Hyper-V as Azure
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                ansible_facts:
+                  system_vendor: "Microsoft Corporation"
+                  product_name: "Virtual Machine"
+                  chassis_asset_tag: "1234-5678"
+
+            - name: Assert the resolved cloud time source is none
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'none'
+                fail_msg: >-
+                  Expected none, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 8 - auto picks none on bare metal
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                ansible_facts:
+                  system_vendor: "Dell Inc."
+                  product_name: "PowerEdge R650"
+                  bios_version: "1.2.3"
+
+            - name: Assert the resolved cloud time source is none
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'none'
+                fail_msg: >-
+                  Expected none, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 9 - auto picks none when no DMI facts were gathered
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                ansible_facts: {}
+
+            - name: Assert the resolved cloud time source is none
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'none'
+                fail_msg: >-
+                  Expected none, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 10 - an explicit aws is used without detection
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: aws
+                ansible_facts:
+                  system_vendor: "Dell Inc."
+
+            - name: Assert the resolved cloud time source is aws
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'aws'
+                fail_msg: >-
+                  Expected aws, got {{ chrony_cloud_time_source_resolved }}.
+
+        - name: Case 11 - none is honoured on an EC2 instance
+          block:
+            - name: Resolve the cloud time source
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: none
+                ansible_facts:
+                  system_vendor: "Amazon EC2"
+
+            - name: Assert the resolved cloud time source is none
+              ansible.builtin.assert:
+                that:
+                  - chrony_cloud_time_source_resolved == 'none'
+                fail_msg: >-
+                  Expected none, got {{ chrony_cloud_time_source_resolved }}.
+
+        # Case 12 - an explicit azure with no PTP device must fail rather
+        # than write a refclock chronyd cannot open.
+        - name: Case 12 - reject an explicit azure with a missing PTP device
+          block:
+            - name: Resolve azure against a missing device
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: azure
+                chrony_azure_ptp_device: "{{ chrony_fake_ptp.path }}.missing"
+                ansible_facts: {}
+            - name: Cloud.yml must not accept this input
+              ansible.builtin.fail:
+                msg: "An explicit azure source with a missing PTP device passed."
+          rescue:
+            - name: Assert the failure names the missing device
+              ansible.builtin.assert:
+                that:
+                  - "'.missing does not exist' in ansible_failed_result.msg"
+                  - "'azure' in ansible_failed_result.msg"
+                fail_msg: >-
+                  cloud.yml rejected the input, but not for the missing PTP
+                  device: {{ ansible_failed_result.msg }}
+
+        # Case 13 - with no cloud detected and both source lists empty,
+        # chrony would have nothing to synchronise against.
+        - name: Case 13 - reject auto with no cloud and no configured sources
+          block:
+            - name: Resolve auto on bare metal with empty source lists
+              ansible.builtin.import_tasks: ../tasks/cloud.yml
+              vars:
+                chrony_cloud_time_source: auto
+                chrony_servers: []
+                chrony_pools: []
+                ansible_facts:
+                  system_vendor: "Dell Inc."
+            - name: Cloud.yml must not accept this input
+              ansible.builtin.fail:
+                msg: "auto with no cloud and no configured sources passed."
+          rescue:
+            - name: Assert the failure is about missing time sources
+              ansible.builtin.assert:
+                that:
+                  - "'chrony_servers' in ansible_failed_result.msg"
+                fail_msg: >-
+                  cloud.yml rejected the input, but not for the missing time
+                  sources: {{ ansible_failed_result.msg }}
+
+      always:
+        - name: Remove the PTP device stand-in
+          ansible.builtin.file:
+            path: "{{ chrony_fake_ptp.path }}"
+            state: absent

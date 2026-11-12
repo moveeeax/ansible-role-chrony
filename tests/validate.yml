@@ -119,7 +119,59 @@
               preflight.yml rejected the input, but not for
               chrony_local_stratum: {{ ansible_failed_result.msg }}
 
-    # Case 5 - the new assertions above must not reject the role's own
+    # Case 5 - a misspelled provider would otherwise resolve to nothing in
+    # cloud.yml and silently render no cloud source.
+    - name: Case 5 - reject an unknown chrony_cloud_time_source
+      block:
+        - name: Run preflight against an unknown cloud time source
+          ansible.builtin.import_tasks: ../tasks/preflight.yml
+          vars:
+            chrony_cloud_time_source: "amazon"
+        - name: Preflight.yml must not accept this input
+          ansible.builtin.fail:
+            msg: "An unknown chrony_cloud_time_source passed preflight validation."
+      rescue:
+        - name: Assert preflight failed for chrony_cloud_time_source
+          ansible.builtin.assert:
+            that:
+              - "'chrony_cloud_time_source' in ansible_failed_result.msg"
+              - "'amazon' in ansible_failed_result.msg"
+            fail_msg: >-
+              preflight.yml rejected the input, but not for
+              chrony_cloud_time_source: {{ ansible_failed_result.msg }}
+
+    # Case 6 - empty source lists with no explicit provider leave chrony with
+    # nothing to synchronise against.
+    - name: Case 6 - reject empty source lists without a cloud provider
+      block:
+        - name: Run preflight with no servers, pools or provider
+          ansible.builtin.import_tasks: ../tasks/preflight.yml
+          vars:
+            chrony_servers: []
+            chrony_pools: []
+            chrony_cloud_time_source: none
+        - name: Preflight.yml must not accept this input
+          ansible.builtin.fail:
+            msg: "A configuration with no time source passed preflight validation."
+      rescue:
+        - name: Assert preflight failed because there is no time source
+          ansible.builtin.assert:
+            that:
+              - "'chrony_servers' in ansible_failed_result.msg"
+            fail_msg: >-
+              preflight.yml rejected the input, but not for the missing time
+              sources: {{ ansible_failed_result.msg }}
+
+    # Case 7 - an explicit provider is a time source by itself, so empty
+    # lists are fine there.
+    - name: Case 7 - preflight accepts an explicit provider with no other sources
+      ansible.builtin.import_tasks: ../tasks/preflight.yml
+      vars:
+        chrony_servers: []
+        chrony_pools: []
+        chrony_cloud_time_source: aws
+
+    # Case 8 - the new assertions above must not reject the role's own
     # shipped defaults.
-    - name: Case 5 - preflight accepts the shipped defaults unmodified
+    - name: Case 8 - preflight accepts the shipped defaults unmodified
       ansible.builtin.import_tasks: ../tasks/preflight.yml

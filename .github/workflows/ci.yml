@@ -40,3 +40,6 @@ jobs:
 
       - name: Run the preflight validation tests
         run: ansible-playbook -i tests/inventory tests/validate.yml
+
+      - name: Run the cloud time source detection tests
+        run: ansible-playbook -i tests/inventory tests/cloud.yml

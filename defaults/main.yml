@@ -41,3 +41,24 @@ chrony_extra_config: []
 # Optionally set the system timezone (as an IANA name such as
 # "Europe/Berlin"). Leave empty to leave the host timezone untouched.
 chrony_timezone: ""
+
+# Use the cloud provider's own time service instead of (or alongside) the
+# sources above. One of:
+#   auto  - detect AWS, GCP or Azure from the gathered DMI facts and use the
+#           matching source; anything else gets no cloud source
+#   aws   - Amazon Time Sync Service (169.254.169.123, time.aws.com backup)
+#   gcp   - the Compute Engine metadata server (metadata.google.internal)
+#   azure - the Hyper-V PTP clock of the Azure host (/dev/ptp_hyperv)
+#   none  - never add a cloud source
+chrony_cloud_time_source: "auto"
+
+# When a cloud source is in use, render it as the only time source and drop
+# chrony_servers and chrony_pools. AWS and Google both advise against mixing
+# their leap-smearing services with public NTP servers. Set to false to keep
+# the sources above as well.
+chrony_cloud_time_source_exclusive: true
+
+# PTP device chrony reads the Azure host clock from. Recent Azure images
+# create this udev symlink; a refclock pointing at a missing device stops
+# chronyd from starting, so the role checks for it first.
+chrony_azure_ptp_device: "/dev/ptp_hyperv"
