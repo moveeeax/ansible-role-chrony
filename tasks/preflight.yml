@@ -14,13 +14,35 @@
       (ansible_os_family = "{{ ansible_os_family | default('undefined, are facts gathered?') }}").
       Supported families: {{ chrony_supported_os_families | join(', ') }}.
 
+- name: Assert chrony_cloud_time_source is a supported value
+  vars:
+    chrony_cloud_time_source_choices:
+      - auto
+      - aws
+      - gcp
+      - azure
+      - none
+  ansible.builtin.assert:
+    that:
+      - chrony_cloud_time_source in chrony_cloud_time_source_choices
+    fail_msg: >-
+      chrony_cloud_time_source must be one of
+      {{ chrony_cloud_time_source_choices | join(', ') }}, got
+      "{{ chrony_cloud_time_source }}".
+
+# An explicit provider is a time source on its own. With "auto" or "none" the
+# lists may still end up as the only sources, so cloud.yml repeats this check
+# once detection has run.
 - name: Assert at least one time source is configured
   ansible.builtin.assert:
     that:
-      - (chrony_servers | length) + (chrony_pools | length) > 0
+      - >-
+        chrony_cloud_time_source in ['aws', 'gcp', 'azure']
+        or (chrony_servers | length) + (chrony_pools | length) > 0
     fail_msg: >-
-      Configure at least one entry in chrony_servers or chrony_pools,
-      otherwise chrony has no time source to synchronise against.
+      Configure at least one entry in chrony_servers or chrony_pools, or set
+      chrony_cloud_time_source to a provider, otherwise chrony has no time
+      source to synchronise against.
 
 # A mapping entry with no "name" key renders past this point and blows up
 # inside chrony.conf.j2 with a bare "object of type 'dict' has no attribute

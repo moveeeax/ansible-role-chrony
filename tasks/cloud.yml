@@ -1,0 +1,83 @@
+---
+# Resolve chrony_cloud_time_source to the provider whose time service
+# chrony.conf.j2 should render, stored as chrony_cloud_time_source_resolved
+# (aws, gcp, azure or none).
+
+# Detection reads DMI facts only, so it works without network access to a
+# metadata endpoint:
+#   - AWS Nitro instances report sys_vendor "Amazon EC2"; Xen-based ones carry
+#     "amazon" in bios_version. Both expose a system UUID starting with "ec2"
+#     (readable by root only, hence the other two checks).
+#   - Compute Engine reports product_name "Google Compute Engine".
+#   - Azure sets the chassis asset tag below, which plain Hyper-V hosts do not,
+#     so an on-premises Hyper-V guest is not mistaken for Azure.
+- name: Detect the cloud provider from DMI facts
+  vars:
+    chrony_dmi_system_vendor: "{{ ansible_facts['system_vendor'] | default('') }}"
+    chrony_dmi_bios_version: "{{ ansible_facts['bios_version'] | default('') | lower }}"
+    chrony_dmi_product_uuid: "{{ ansible_facts['product_uuid'] | default('') | lower }}"
+    chrony_dmi_product_name: "{{ ansible_facts['product_name'] | default('') }}"
+    chrony_dmi_chassis_asset_tag: "{{ ansible_facts['chassis_asset_tag'] | default('') }}"
+  ansible.builtin.set_fact:
+    chrony_cloud_time_source_detected: >-
+      {%- if chrony_dmi_system_vendor == 'Amazon EC2'
+            or 'amazon' in chrony_dmi_bios_version
+            or chrony_dmi_product_uuid.startswith('ec2') -%}
+      aws
+      {%- elif chrony_dmi_product_name == 'Google Compute Engine' -%}
+      gcp
+      {%- elif chrony_dmi_chassis_asset_tag == '7783-7084-3265-9085-8269-3286-77' -%}
+      azure
+      {%- else -%}
+      none
+      {%- endif -%}
+  when: chrony_cloud_time_source == 'auto'
+
+- name: Select the cloud time source
+  ansible.builtin.set_fact:
+    chrony_cloud_time_source_resolved: >-
+      {{ chrony_cloud_time_source_detected
+         if chrony_cloud_time_source == 'auto'
+         else chrony_cloud_time_source }}
+
+- name: Check for the Azure host PTP device
+  ansible.builtin.stat:
+    path: "{{ chrony_azure_ptp_device }}"
+  register: chrony_azure_ptp
+  when: chrony_cloud_time_source_resolved == 'azure'
+
+# chronyd treats a refclock it cannot open as fatal and refuses to start, so
+# a missing device must not reach chrony.conf. An explicit "azure" fails here;
+# "auto" falls back to the ordinary sources instead.
+- name: Assert the Azure PTP device exists when azure is requested explicitly
+  ansible.builtin.assert:
+    that:
+      - chrony_azure_ptp.stat.exists
+    fail_msg: >-
+      chrony_cloud_time_source is "azure" but {{ chrony_azure_ptp_device }}
+      does not exist, and chronyd will not start with a refclock it cannot
+      open. Add the udev rule that creates it (see Microsoft's "Time sync for
+      Linux VMs in Azure"), set chrony_azure_ptp_device to the right
+      /dev/ptpN, or use a different chrony_cloud_time_source.
+  when:
+    - chrony_cloud_time_source == 'azure'
+
+- name: Fall back to the ordinary sources when the Azure PTP device is missing
+  ansible.builtin.set_fact:
+    chrony_cloud_time_source_resolved: "none"
+  when:
+    - chrony_cloud_time_source == 'auto'
+    - chrony_cloud_time_source_resolved == 'azure'
+    - not chrony_azure_ptp.stat.exists
+
+- name: Assert at least one time source remains
+  ansible.builtin.assert:
+    that:
+      - >-
+        chrony_cloud_time_source_resolved != 'none'
+        or (chrony_servers | length) + (chrony_pools | length) > 0
+    fail_msg: >-
+      No cloud time source applies to this host
+      (chrony_cloud_time_source = "{{ chrony_cloud_time_source }}") and
+      chrony_servers and chrony_pools are both empty, so chrony has no time
+      source to synchronise against.

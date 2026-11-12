@@ -15,6 +15,13 @@
     - chrony
     - vars
 
+- name: Select the cloud time source
+  ansible.builtin.import_tasks: cloud.yml
+  tags:
+    - chrony
+    - cloud
+    - configure
+
 - name: Manage system timezone
   ansible.builtin.import_tasks: timezone.yml
   when: chrony_timezone | length > 0

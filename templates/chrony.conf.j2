@@ -1,6 +1,24 @@
 ## {{ ansible_managed }}
 ## chrony configuration managed by ansible-role-chrony.
 
+{# Set by tasks/cloud.yml; "none" when the template is rendered on its own. #}
+{% set chrony_cloud = chrony_cloud_time_source_resolved | default('none') %}
+{% if chrony_cloud == 'aws' %}
+# Amazon Time Sync Service on the instance's link-local address.
+server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4
+# Public Amazon Time Sync Service as a backup.
+pool time.aws.com iburst
+
+{% elif chrony_cloud == 'gcp' %}
+# Compute Engine metadata server time service.
+server metadata.google.internal iburst
+
+{% elif chrony_cloud == 'azure' %}
+# Azure host clock exposed by Hyper-V as a PTP device.
+refclock PHC {{ chrony_azure_ptp_device }} poll 3 dpoll -2 offset 0 stratum 2
+
+{% endif %}
+{% if chrony_cloud == 'none' or not (chrony_cloud_time_source_exclusive | bool) %}
 {% for server in chrony_servers %}
 {% if server is mapping %}
 server {{ server.name }}{% if server.options is defined %} {{ server.options }}{% endif %}
@@ -17,6 +35,7 @@ pool {{ pool.name }}{% if pool.options is defined %} {{ pool.options }}{% endif 
 pool {{ pool }} iburst
 {% endif %}
 {% endfor %}
+{% endif %}
 
 # Record the rate at which the system clock gains or loses time.
 driftfile {{ chrony_driftfile }}

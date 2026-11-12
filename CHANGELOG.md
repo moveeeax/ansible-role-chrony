@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- `chrony_cloud_time_source` (`auto`, `aws`, `gcp`, `azure`, `none`; default
+  `auto`). On a VM detected from DMI facts as EC2, Compute Engine or Azure,
+  chrony uses the provider's time service: the Amazon Time Sync Service at
+  `169.254.169.123` with `time.aws.com` as a backup, `metadata.google.internal`,
+  or the Hyper-V PTP clock at `chrony_azure_ptp_device`
+  (`/dev/ptp_hyperv`). `chrony_cloud_time_source_exclusive` (default `true`)
+  controls whether `chrony_servers` and `chrony_pools` are dropped in that
+  case. On Azure a missing PTP device falls back to the ordinary sources under
+  `auto` and fails the play when `azure` is set explicitly.
+- `tests/cloud.yml`, an offline test playbook for the provider detection. It
+  runs in CI.
+
 - `tests/validate.yml`, an offline test playbook that imports the role's real
   `tasks/preflight.yml` against deliberately invalid input and asserts each
   case is rejected with an actionable message. It runs in CI.
@@ -21,6 +33,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- On EC2, Compute Engine and Azure VMs the default configuration no longer
+  lists the `pool.ntp.org` sources; the provider's time service replaces them.
+  Set `chrony_cloud_time_source: none` to keep the previous output.
 - CI uses `actions/checkout@v7` and `actions/setup-python@v7`.
 - The README links to the chrony project at its current home,
   <https://chrony-project.org/>. The old `chrony.tuxfamily.org` address only

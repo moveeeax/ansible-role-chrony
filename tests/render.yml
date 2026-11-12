@@ -152,6 +152,100 @@
               Server-mode directives are missing. A dropped allow entry silently
               denies clients; a dropped local stratum silently stops serving.
 
+        # Case 5 - each cloud provider's time service, rendered as the only
+        # source by default. AWS and Google advise against mixing their
+        # leap-smearing service with the public pool.ntp.org servers.
+        - name: Render each cloud time source in exclusive mode
+          ansible.builtin.template:
+            src: "{{ chrony_template }}"
+            dest: "{{ chrony_render_dir.path }}/cloud-{{ item }}.conf"
+            mode: "0644"
+          vars:
+            chrony_cloud_time_source_resolved: "{{ item }}"
+          loop:
+            - aws
+            - gcp
+            - azure
+
+        - name: Assert the AWS configuration uses only the Amazon Time Sync Service
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/cloud-aws.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4' in conf"
+              - "'pool time.aws.com iburst' in conf"
+              - conf.index('169.254.169.123') < conf.index('time.aws.com')
+              - "'pool.ntp.org' not in conf"
+            fail_msg: >-
+              The AWS configuration lost the local Amazon Time Sync Service, its
+              time.aws.com backup, or still mixes in pool.ntp.org.
+
+        - name: Assert the GCP configuration uses only the metadata server
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/cloud-gcp.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'server metadata.google.internal iburst' in conf"
+              - "'pool.ntp.org' not in conf"
+            fail_msg: >-
+              The GCP configuration lost metadata.google.internal or still mixes
+              in pool.ntp.org.
+
+        - name: Assert the Azure configuration uses only the host PTP clock
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/cloud-azure.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'refclock PHC /dev/ptp_hyperv poll 3 dpoll -2 offset 0 stratum 2' in conf"
+              - "'pool.ntp.org' not in conf"
+            fail_msg: >-
+              The Azure configuration lost the /dev/ptp_hyperv refclock or still
+              mixes in pool.ntp.org.
+
+        # Case 6 - with exclusive mode off, the cloud source comes first and
+        # the configured servers and pools follow it.
+        - name: Render the AWS time source alongside the configured sources
+          ansible.builtin.template:
+            src: "{{ chrony_template }}"
+            dest: "{{ chrony_render_dir.path }}/cloud-shared.conf"
+            mode: "0644"
+          vars:
+            chrony_cloud_time_source_resolved: aws
+            chrony_cloud_time_source_exclusive: false
+
+        - name: Assert the cloud source precedes the configured sources
+          vars:
+            conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/cloud-shared.conf') }}"
+          ansible.builtin.assert:
+            that:
+              - "'server 169.254.169.123 prefer iburst minpoll 4 maxpoll 4' in conf"
+              - "'server 0.pool.ntp.org iburst' in conf"
+              - "'pool 2.pool.ntp.org iburst' in conf"
+              - conf.index('169.254.169.123') < conf.index('0.pool.ntp.org')
+            fail_msg: >-
+              chrony_cloud_time_source_exclusive=false dropped either the cloud
+              source or the configured sources, or put the cloud source last.
+
+        # Case 7 - a resolved "none" must render exactly what the role
+        # rendered before cloud sources existed.
+        - name: Render with no cloud time source
+          ansible.builtin.template:
+            src: "{{ chrony_template }}"
+            dest: "{{ chrony_render_dir.path }}/cloud-none.conf"
+            mode: "0644"
+          vars:
+            chrony_cloud_time_source_resolved: none
+
+        - name: Assert a resolved none matches the plain defaults
+          ansible.builtin.assert:
+            that:
+              - >-
+                lookup('ansible.builtin.file', chrony_render_dir.path ~ '/cloud-none.conf')
+                == lookup('ansible.builtin.file', chrony_render_dir.path ~ '/defaults.conf')
+            fail_msg: >-
+              chrony_cloud_time_source_resolved=none changed the rendered
+              configuration; it must leave the configured sources untouched.
+
         # A malformed directive (for example a mapping entry without a name)
         # would be rejected by chronyd at deploy time, but only after the file
         # has been written. Catch the shape here instead.
@@ -160,13 +254,18 @@
             conf: "{{ lookup('ansible.builtin.file', chrony_render_dir.path ~ '/' ~ item) }}"
           ansible.builtin.assert:
             that:
-              - conf | regex_search('(?m)^(server|pool|allow|driftfile|local)\\s*$') is none
+              - conf | regex_search('(?m)^(server|pool|refclock|allow|driftfile|local)\\s*$') is none
             fail_msg: "{{ item }} contains a chrony directive with no argument."
           loop:
             - defaults.conf
             - mappings.conf
             - noclock.conf
             - server.conf
+            - cloud-aws.conf
+            - cloud-gcp.conf
+            - cloud-azure.conf
+            - cloud-shared.conf
+            - cloud-none.conf
 
       always:
         - name: Remove the scratch directory
